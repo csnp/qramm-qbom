@@ -184,9 +184,62 @@ QBOM defines an open specification for quantum experiment provenance.
 | Framework | Status | Adapter |
 |-----------|--------|---------|
 | **Qiskit** | ✅ Supported | Full capture including IBM calibration |
-| **Cirq** | 🚧 Planned | Coming soon |
-| **PennyLane** | 🚧 Planned | Coming soon |
-| **Braket** | 🚧 Planned | Coming soon |
+| **Cirq** | ✅ Supported | Simulator and Google Quantum Engine |
+| **PennyLane** | ✅ Supported | QNodes, devices, batch execution |
+| **Braket** | 🚧 Planned | AWS quantum hardware (coming soon) |
+
+### Multi-Framework Examples
+
+**Qiskit:**
+```python
+import qbom
+from qiskit import QuantumCircuit
+from qiskit_aer import AerSimulator
+
+qc = QuantumCircuit(2)
+qc.h(0)
+qc.cx(0, 1)
+qc.measure_all()
+
+backend = AerSimulator()
+job = backend.run(qc, shots=4096)
+result = job.result()
+# Trace automatically captured!
+```
+
+**Cirq:**
+```python
+import qbom
+import cirq
+
+q0, q1 = cirq.LineQubit.range(2)
+circuit = cirq.Circuit([
+    cirq.H(q0),
+    cirq.CNOT(q0, q1),
+    cirq.measure(q0, q1, key='result')
+])
+
+simulator = cirq.Simulator()
+result = simulator.run(circuit, repetitions=4096)
+# Trace automatically captured!
+```
+
+**PennyLane:**
+```python
+import qbom
+import pennylane as qml
+
+dev = qml.device("default.qubit", wires=2, shots=4096)
+
+@qml.qnode(dev)
+def bell_state():
+    qml.Hadamard(wires=0)
+    qml.CNOT(wires=[0, 1])
+    return qml.counts()
+
+result = bell_state()
+# Trace automatically captured!
+```
 
 ---
 
