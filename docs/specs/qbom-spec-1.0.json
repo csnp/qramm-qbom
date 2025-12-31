@@ -1,0 +1,321 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://qramm.org/schemas/qbom-1.0.json",
+  "title": "QBOM - Quantum Bill of Materials",
+  "description": "Schema for capturing complete provenance of quantum computing experiments. Developed by CSNP (CyberSecurity NonProfit).",
+  "version": "1.0",
+  "type": "object",
+  "required": ["qbom_version", "id", "created_at"],
+  "properties": {
+    "qbom_version": {
+      "type": "string",
+      "description": "QBOM specification version",
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "description": "Unique trace identifier",
+      "pattern": "^qbom_[a-f0-9]{8}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of trace creation"
+    },
+    "content_hash": {
+      "type": "string",
+      "description": "SHA-256 hash of scientific content for verification",
+      "pattern": "^[a-f0-9]{16}$"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Human-readable one-line summary"
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "environment": {
+      "$ref": "#/$defs/Environment"
+    },
+    "circuits": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Circuit"
+      },
+      "description": "Quantum circuits executed in this experiment"
+    },
+    "transpilation": {
+      "$ref": "#/$defs/Transpilation"
+    },
+    "hardware": {
+      "$ref": "#/$defs/Hardware"
+    },
+    "execution": {
+      "$ref": "#/$defs/Execution"
+    },
+    "result": {
+      "$ref": "#/$defs/Result"
+    },
+    "parent_id": {
+      "type": "string",
+      "description": "ID of parent trace if this is derived"
+    }
+  },
+  "$defs": {
+    "Metadata": {
+      "type": "object",
+      "description": "User-provided metadata",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Experiment name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Experiment description"
+        },
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Searchable tags"
+        },
+        "authors": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Experiment authors"
+        },
+        "paper": {
+          "type": "string",
+          "description": "DOI or URL of related publication"
+        },
+        "experiment_id": {
+          "type": "string",
+          "description": "User's experiment identifier"
+        }
+      }
+    },
+    "Package": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"type": "string"},
+        "version": {"type": "string"},
+        "purl": {
+          "type": "string",
+          "description": "Package URL (CycloneDX format)"
+        }
+      }
+    },
+    "Environment": {
+      "type": "object",
+      "description": "Software environment snapshot",
+      "required": ["python", "platform"],
+      "properties": {
+        "python": {
+          "type": "string",
+          "description": "Python version"
+        },
+        "platform": {
+          "type": "string",
+          "description": "Operating system and architecture"
+        },
+        "packages": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/Package"},
+          "description": "Installed packages"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "quantum_sdk": {
+          "type": "string",
+          "description": "Primary quantum SDK detected"
+        }
+      }
+    },
+    "GateCounts": {
+      "type": "object",
+      "properties": {
+        "single_qubit": {"type": "integer"},
+        "two_qubit": {"type": "integer"},
+        "total": {"type": "integer"},
+        "by_name": {
+          "type": "object",
+          "additionalProperties": {"type": "integer"}
+        }
+      }
+    },
+    "Circuit": {
+      "type": "object",
+      "description": "Quantum circuit representation",
+      "required": ["num_qubits", "depth", "gates", "hash"],
+      "properties": {
+        "name": {"type": "string"},
+        "num_qubits": {"type": "integer", "minimum": 1},
+        "num_clbits": {"type": "integer", "minimum": 0},
+        "depth": {"type": "integer", "minimum": 0},
+        "gates": {"$ref": "#/$defs/GateCounts"},
+        "hash": {
+          "type": "string",
+          "description": "Content-addressable hash"
+        },
+        "qasm": {
+          "type": "string",
+          "description": "OpenQASM representation"
+        },
+        "json_repr": {
+          "type": "object",
+          "description": "Native JSON format"
+        }
+      }
+    },
+    "QubitMapping": {
+      "type": "object",
+      "properties": {
+        "logical_to_physical": {
+          "type": "object",
+          "additionalProperties": {"type": "integer"},
+          "description": "Mapping from logical to physical qubit indices"
+        },
+        "physical_qubits": {
+          "type": "array",
+          "items": {"type": "integer"}
+        }
+      }
+    },
+    "Transpilation": {
+      "type": "object",
+      "description": "Transpilation record",
+      "properties": {
+        "optimization_level": {"type": "integer", "minimum": 0, "maximum": 3},
+        "basis_gates": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "seed": {"type": "integer"},
+        "layout_method": {"type": "string"},
+        "routing_method": {"type": "string"},
+        "initial_layout": {"$ref": "#/$defs/QubitMapping"},
+        "final_layout": {"$ref": "#/$defs/QubitMapping"},
+        "input_circuit": {"$ref": "#/$defs/Circuit"},
+        "output_circuit": {"$ref": "#/$defs/Circuit"},
+        "depth_increase": {"type": "number"}
+      }
+    },
+    "QubitProperties": {
+      "type": "object",
+      "required": ["index"],
+      "properties": {
+        "index": {"type": "integer"},
+        "t1_us": {"type": "number", "description": "T1 relaxation time in microseconds"},
+        "t2_us": {"type": "number", "description": "T2 coherence time in microseconds"},
+        "readout_error": {"type": "number", "minimum": 0, "maximum": 1},
+        "frequency_ghz": {"type": "number"}
+      }
+    },
+    "GateProperties": {
+      "type": "object",
+      "required": ["gate", "qubits"],
+      "properties": {
+        "gate": {"type": "string"},
+        "qubits": {
+          "type": "array",
+          "items": {"type": "integer"}
+        },
+        "error": {"type": "number", "minimum": 0, "maximum": 1},
+        "duration_ns": {"type": "number"}
+      }
+    },
+    "Calibration": {
+      "type": "object",
+      "description": "Hardware calibration snapshot",
+      "required": ["timestamp"],
+      "properties": {
+        "timestamp": {"type": "string", "format": "date-time"},
+        "qubits": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/QubitProperties"}
+        },
+        "gates": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/GateProperties"}
+        }
+      }
+    },
+    "Hardware": {
+      "type": "object",
+      "description": "Hardware backend information",
+      "required": ["provider", "backend", "num_qubits"],
+      "properties": {
+        "provider": {"type": "string"},
+        "backend": {"type": "string"},
+        "num_qubits": {"type": "integer"},
+        "qubits_used": {
+          "type": "array",
+          "items": {"type": "integer"}
+        },
+        "is_simulator": {"type": "boolean"},
+        "calibration": {"$ref": "#/$defs/Calibration"}
+      }
+    },
+    "ErrorMitigation": {
+      "type": "object",
+      "properties": {
+        "method": {"type": "string"},
+        "parameters": {"type": "object"}
+      }
+    },
+    "Execution": {
+      "type": "object",
+      "description": "Execution parameters and timing",
+      "required": ["shots"],
+      "properties": {
+        "job_id": {"type": "string"},
+        "shots": {"type": "integer", "minimum": 1},
+        "seed": {"type": "integer"},
+        "error_mitigation": {"$ref": "#/$defs/ErrorMitigation"},
+        "submitted_at": {"type": "string", "format": "date-time"},
+        "started_at": {"type": "string", "format": "date-time"},
+        "completed_at": {"type": "string", "format": "date-time"},
+        "queue_time_seconds": {"type": "number"},
+        "execution_time_seconds": {"type": "number"}
+      }
+    },
+    "Counts": {
+      "type": "object",
+      "required": ["raw", "shots"],
+      "properties": {
+        "raw": {
+          "type": "object",
+          "additionalProperties": {"type": "integer"},
+          "description": "Measurement counts by bitstring"
+        },
+        "shots": {"type": "integer"},
+        "probabilities": {
+          "type": "object",
+          "additionalProperties": {"type": "number"}
+        }
+      }
+    },
+    "Result": {
+      "type": "object",
+      "description": "Execution results",
+      "required": ["counts", "hash"],
+      "properties": {
+        "counts": {"$ref": "#/$defs/Counts"},
+        "memory": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Shot-by-shot results"
+        },
+        "metadata": {"type": "object"},
+        "hash": {
+          "type": "string",
+          "description": "Hash of raw results for verification"
+        },
+        "mitigated_counts": {"$ref": "#/$defs/Counts"}
+      }
+    }
+  }
+}

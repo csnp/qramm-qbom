@@ -1,0 +1,80 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "qbom"
+version = "0.1.0"
+description = "Quantum Bill of Materials - Invisible provenance capture for quantum computing experiments"
+readme = "README.md"
+license = "Apache-2.0"
+authors = [
+    { name = "CSNP", email = "qbom@csnp.org" }
+]
+keywords = [
+    "quantum",
+    "quantum-computing",
+    "reproducibility",
+    "sbom",
+    "provenance",
+    "qiskit",
+    "cirq",
+    "pennylane"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "rich>=13.0.0",
+    "pydantic>=2.0.0",
+    "click>=8.0.0",
+    "xxhash>=3.0.0",
+]
+
+[project.optional-dependencies]
+qiskit = ["qiskit>=1.0.0"]
+cirq = ["cirq>=1.0.0"]
+pennylane = ["pennylane>=0.30.0"]
+all = ["qiskit>=1.0.0", "cirq>=1.0.0", "pennylane>=0.30.0"]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+qbom = "qbom.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/csnp/qbom"
+Documentation = "https://qbom.qramm.org"
+Repository = "https://github.com/csnp/qbom"
+Issues = "https://github.com/csnp/qbom/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/qbom"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --cov=qbom"
