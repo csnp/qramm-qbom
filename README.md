@@ -1,18 +1,17 @@
-# QBOM
-
-## Quantum Bill of Materials
+# QBOM - Quantum Bill of Materials
 
 <div align="center">
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.10+-green.svg)](https://python.org)
-[![QRAMM](https://img.shields.io/badge/QRAMM-Tool-purple.svg)](https://qramm.org)
-
 **Invisible provenance capture for quantum computing experiments.**
 
-One import. Complete reproducibility.
+*One import. Complete reproducibility.*
 
-[Specification](#specification) · [Quick Start](#quick-start) · [Documentation](#documentation) · [Contributing](#contributing)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10+-green.svg)](https://python.org)
+[![PyPI](https://img.shields.io/pypi/v/qbom.svg)](https://pypi.org/project/qbom/)
+[![QRAMM](https://img.shields.io/badge/QRAMM-Tool-purple.svg)](https://qramm.org)
+
+[Quick Start](#quick-start) · [Use Cases](docs/USE-CASES.md) · [Documentation](docs/) · [Why QBOM?](docs/WHY-QBOM.md) · [Contributing](#contributing)
 
 </div>
 
@@ -20,180 +19,23 @@ One import. Complete reproducibility.
 
 ## The Problem
 
-Quantum experiments are unreproducible.
+Quantum computing experiments are notoriously difficult to reproduce. When a paper claims *"We achieved 73% fidelity on Grover's algorithm"*, reviewers and other researchers have no way to verify or reproduce the result because critical information is missing:
 
-```
-Paper says: "We achieved 73% fidelity on Grover's algorithm"
+| What's Reported | What's Actually Needed |
+|-----------------|------------------------|
+| "Qiskit 1.0" | Exact versions of qiskit, qiskit-aer, numpy, scipy... |
+| "IBM Brisbane" | Which of the 127 qubits? What were the error rates? |
+| "4096 shots" | What optimization level? What routing algorithm? |
 
-Reviewer: "I got 41%. What qubits? What transpiler? What calibration?"
-```
-
-To reproduce a quantum experiment, you need to know:
-
-- **Software**: Qiskit version, all dependencies, Python version
-- **Circuit**: Exact gate sequence, how it was constructed
-- **Transpilation**: Optimization level, routing algorithm, qubit mapping
-- **Hardware**: Which backend, which physical qubits, calibration at that moment
-- **Execution**: Number of shots, error mitigation method
-
-What papers typically report: *"We used Qiskit 1.0 on IBM Brisbane, 4096 shots"*
-
-Everything else? **Lost.**
+The result: **quantum research has a reproducibility crisis.**
 
 ## The Solution
 
 ```python
-import qbom  # That's it. Everything is now captured.
+import qbom  # Add this single line
 
+# Your existing quantum code - unchanged
 from qiskit import QuantumCircuit, transpile
-from qiskit_ibm_runtime import QiskitRuntimeService
-
-qc = QuantumCircuit(2)
-qc.h(0)
-qc.cx(0, 1)
-qc.measure_all()
-
-service = QiskitRuntimeService()
-backend = service.backend("ibm_brisbane")
-transpiled = transpile(qc, backend)
-job = backend.run(transpiled, shots=4096)
-result = job.result()
-
-# Everything automatically captured!
-trace = qbom.current()
-trace.export("experiment.qbom.json")
-```
-
-**The magic:** Import a library. Change nothing else. Get complete provenance.
-
----
-
-## What QBOM Captures
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│ QBOM TRACE                                                          │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  ENVIRONMENT          CIRCUIT              TRANSPILATION            │
-│  ─────────────        ───────              ─────────────            │
-│  Python 3.11.5        Bell State           Optimization: 3          │
-│  qiskit 1.0.2         2 qubits             Layout: SABRE            │
-│  numpy 1.24.0         depth 2              Routing: SABRE           │
-│                       2 gates              Depth: 2 → 5             │
-│                                                                     │
-│  HARDWARE             EXECUTION            RESULTS                  │
-│  ────────             ─────────            ───────                  │
-│  ibm_brisbane         4,096 shots          |00⟩: 49.2%              │
-│  Qubits: [12, 15]     Job: cq8x7k2j9f      |11⟩: 48.7%              │
-│  CX error: 0.82%      Time: 2.3s           other: 2.1%              │
-│  T1: 145μs, 132μs                                                   │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### Calibration Snapshots
-
-QBOM captures hardware calibration **at the moment of execution**—critical data that changes daily and is otherwise lost forever.
-
-```
-Calibration: 2025-01-15T06:00:00Z
-├── Qubit 12: T1=145μs, T2=98μs, readout_error=1.8%
-├── Qubit 15: T1=132μs, T2=89μs, readout_error=2.1%
-└── CX(12,15): error=0.82%, duration=340ns
-```
-
----
-
-## Quick Start
-
-### Installation
-
-```bash
-pip install qbom
-
-# With Qiskit support (recommended)
-pip install qbom[qiskit]
-
-# With all frameworks
-pip install qbom[all]
-```
-
-### Usage
-
-```python
-import qbom  # Add this line to your script
-
-# Your existing quantum code works exactly as before
-# QBOM captures everything invisibly
-
-# View current trace
-qbom.show()
-
-# Export for paper/reproducibility
-qbom.export("experiment.qbom.json")
-```
-
-### CLI
-
-```bash
-# List recent traces
-qbom list
-
-# View a trace
-qbom show qbom_7x8k2mf9
-
-# Compare two traces
-qbom diff qbom_7x8k2mf9 qbom_3j9x1kp2
-
-# Generate paper statement
-qbom paper qbom_7x8k2mf9
-
-# Export as CycloneDX SBOM
-qbom export qbom_7x8k2mf9 experiment.cdx.json -f cyclonedx
-```
-
----
-
-## Specification
-
-QBOM defines an open specification for quantum experiment provenance.
-
-**[QBOM Specification v1.0](docs/specs/qbom-spec-1.0.json)** — JSON Schema
-
-### Design Principles
-
-1. **Framework-agnostic** — Works with Qiskit, Cirq, PennyLane, and more
-2. **Invisible capture** — Scientists don't change their workflow
-3. **CycloneDX compatible** — Extends the SBOM standard for quantum
-4. **Content-addressable** — Every trace has a verifiable hash
-5. **Calibration-as-dependency** — Hardware state is a captured dependency
-
-### Export Formats
-
-| Format | Use Case |
-|--------|----------|
-| `json` | Default QBOM format for storage and sharing |
-| `cyclonedx` | CycloneDX SBOM with QBOM extension for compliance |
-| `yaml` | Human-readable alternative |
-
----
-
-## Framework Support
-
-| Framework | Status | Adapter |
-|-----------|--------|---------|
-| **Qiskit** | ✅ Supported | Full capture including IBM calibration |
-| **Cirq** | ✅ Supported | Simulator and Google Quantum Engine |
-| **PennyLane** | ✅ Supported | QNodes, devices, batch execution |
-| **Braket** | 🚧 Planned | AWS quantum hardware (coming soon) |
-
-### Multi-Framework Examples
-
-**Qiskit:**
-```python
-import qbom
-from qiskit import QuantumCircuit
 from qiskit_aer import AerSimulator
 
 qc = QuantumCircuit(2)
@@ -204,64 +46,302 @@ qc.measure_all()
 backend = AerSimulator()
 job = backend.run(qc, shots=4096)
 result = job.result()
-# Trace automatically captured!
+
+# Everything captured automatically
+qbom.show()
 ```
 
-**Cirq:**
-```python
-import qbom
-import cirq
+**Output:**
 
-q0, q1 = cirq.LineQubit.range(2)
-circuit = cirq.Circuit([
-    cirq.H(q0),
-    cirq.CNOT(q0, q1),
-    cirq.measure(q0, q1, key='result')
-])
-
-simulator = cirq.Simulator()
-result = simulator.run(circuit, repetitions=4096)
-# Trace automatically captured!
+```
+╭──────────────────────────── QBOM: qbom_c4b17b13 ─────────────────────────────╮
+│ Summary: 2 circuits | on aer_simulator | 4,096 shots                         │
+│ Created: 2025-01-15 14:30:07 UTC                                             │
+│ Hash: a9463e429a524897                                                       │
+│                                                                              │
+│ ENVIRONMENT                                                                  │
+│   Python:  3.11.12                                                           │
+│   SDK:     qiskit==2.2.3                                                     │
+│   qiskit: 2.2.3, qiskit-aer: 0.17.2, numpy: 1.26.4, scipy: 1.15.3           │
+│                                                                              │
+│ CIRCUIT                                                                      │
+│   Name: bell_state | Qubits: 2 | Depth: 3 | Gates: 5 (1 1q, 1 2q)           │
+│                                                                              │
+│ TRANSPILATION                                                                │
+│   Optimization: Level 2 | Depth: 3 → 3 (1.0x)                               │
+│                                                                              │
+│ HARDWARE                                                                     │
+│   Provider: Aer (Local) | Backend: aer_simulator | Type: Simulator          │
+│                                                                              │
+│ EXECUTION                                                                    │
+│   Shots: 4,096 | Job ID: 12c28690-07fa-4248-9d05-34aa03d21ef1               │
+│                                                                              │
+│ RESULTS                                                                      │
+│   |11⟩ ███████████████░░░░░░░░░░░░░░░  50.8%                                │
+│   |00⟩ ██████████████░░░░░░░░░░░░░░░░  49.2%                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
-**PennyLane:**
+---
+
+## Quick Start
+
+### Installation
+
+```bash
+# Basic installation
+pip install qbom
+
+# With Qiskit support (recommended)
+pip install qbom[qiskit]
+
+# With all quantum frameworks
+pip install qbom[all]
+```
+
+### Basic Usage
+
 ```python
-import qbom
-import pennylane as qml
+import qbom  # Add at the top of your script
 
-dev = qml.device("default.qubit", wires=2, shots=4096)
+# Your quantum code here...
 
-@qml.qnode(dev)
-def bell_state():
-    qml.Hadamard(wires=0)
-    qml.CNOT(wires=[0, 1])
-    return qml.counts()
+# View the captured trace
+qbom.show()
 
-result = bell_state()
-# Trace automatically captured!
+# Export for sharing/publication
+qbom.export("my_experiment.qbom.json")
+```
+
+### Command Line
+
+```bash
+# List recent traces
+qbom list
+
+# View a specific trace
+qbom show qbom_c4b17b13
+
+# Check reproducibility score
+qbom score qbom_c4b17b13
+
+# Export to CycloneDX SBOM format
+qbom export qbom_c4b17b13 experiment.cdx.json -f cyclonedx
+
+# Generate paper reproducibility statement
+qbom paper qbom_c4b17b13
+```
+
+---
+
+## What QBOM Captures
+
+QBOM automatically captures everything needed to reproduce a quantum experiment:
+
+### Environment
+- Python version and platform
+- All quantum SDK versions (qiskit, cirq, pennylane)
+- Scientific package versions (numpy, scipy)
+
+### Circuit
+- Gate counts and types
+- Circuit depth
+- Qubit and classical bit counts
+- Content hash for verification
+
+### Transpilation
+- Optimization level
+- Layout and routing methods
+- Initial and final qubit mappings
+- Before/after circuit comparison
+
+### Hardware
+- Provider (IBM Quantum, Aer, Google, etc.)
+- Backend name and qubit count
+- Calibration data (T1, T2, error rates)
+- Timestamp of calibration
+
+### Execution
+- Number of shots
+- Job ID for traceability
+- Submission and completion times
+
+### Results
+- Raw measurement counts
+- Probability distributions
+- Result hash for verification
+
+---
+
+## Supported Frameworks
+
+| Framework | Status | Features |
+|-----------|--------|----------|
+| **Qiskit** | ✅ Full Support | Circuits, transpilation, IBM backends, Aer simulator |
+| **Cirq** | ✅ Supported | Circuits, simulators, Google Quantum Engine |
+| **PennyLane** | ✅ Supported | QNodes, devices, gradients |
+| **Braket** | 🚧 Planned | AWS quantum hardware |
+
+---
+
+## CLI Reference
+
+| Command | Description |
+|---------|-------------|
+| `qbom list` | List recent experiment traces |
+| `qbom show <id>` | Display detailed trace information |
+| `qbom score <id>` | Calculate reproducibility score (0-100) |
+| `qbom validate <id>` | Check trace completeness |
+| `qbom diff <id1> <id2>` | Compare two traces |
+| `qbom drift <id>` | Analyze calibration drift |
+| `qbom export <id> <file>` | Export trace to file |
+| `qbom paper <id>` | Generate reproducibility statement |
+| `qbom verify <file>` | Verify trace file integrity |
+
+---
+
+## Export Formats
+
+| Format | Flag | Use Case |
+|--------|------|----------|
+| JSON | `-f json` | Default QBOM format |
+| CycloneDX | `-f cyclonedx` | SBOM compliance, supply chain tools |
+| SPDX | `-f spdx` | Open source compliance |
+| YAML | `-f yaml` | Human-readable alternative |
+
+```bash
+# Export examples
+qbom export qbom_abc123 trace.json
+qbom export qbom_abc123 trace.cdx.json -f cyclonedx
+qbom export qbom_abc123 trace.spdx.json -f spdx
+```
+
+---
+
+## Reproducibility Score
+
+QBOM calculates a 0-100 reproducibility score based on captured information:
+
+| Score | Grade | Meaning |
+|-------|-------|---------|
+| 90-100 | Excellent | Fully reproducible |
+| 70-89 | Good | Minor details missing |
+| 50-69 | Fair | Some important info missing |
+| 25-49 | Poor | Major gaps |
+| 0-24 | Critical | Cannot reproduce |
+
+```bash
+$ qbom score qbom_c4b17b13
+
+╭─────────────────────────── Reproducibility Score ────────────────────────────╮
+│ 71/100 (Good)                                                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+┏━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━┓
+┃ Component     ┃ Category              ┃ Score ┃ Status ┃
+┡━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━┩
+│ Environment   │ Software              │ 20/20 │ ●      │
+│ Circuit       │ Quantum Program       │ 17/20 │ ◐      │
+│ Transpilation │ Circuit Compilation   │  7/15 │ ◐      │
+│ Hardware      │ Backend & Calibration │  9/25 │ ◐      │
+│ Execution     │ Run Parameters        │ 10/10 │ ●      │
+│ Results       │ Output Verification   │  8/10 │ ●      │
+└───────────────┴───────────────────────┴───────┴────────┘
+```
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Use Cases](docs/USE-CASES.md) | Real-world scenarios and examples |
+| [Installation Guide](docs/INSTALLATION.md) | Detailed installation instructions |
+| [Usage Guide](docs/USAGE.md) | Complete usage examples |
+| [CLI Reference](docs/CLI.md) | Full command-line documentation |
+| [Python API](docs/API.md) | Python API reference |
+| [Adapters](docs/ADAPTERS.md) | Framework adapter details |
+| [Why QBOM?](docs/WHY-QBOM.md) | Background and motivation |
+| [Contributing](CONTRIBUTING.md) | Contribution guidelines |
+
+---
+
+## Architecture
+
+```
+~/.qbom/
+└── traces/                    # Local trace storage
+    ├── qbom_abc123.json
+    ├── qbom_def456.json
+    └── ...
+
+qbom/
+├── core/                      # Framework-agnostic core
+│   ├── models.py              # Pydantic data models
+│   ├── trace.py               # Trace object and builder
+│   └── session.py             # Global session management
+├── adapters/                  # Framework-specific hooks
+│   ├── qiskit.py              # Qiskit adapter
+│   ├── cirq.py                # Cirq adapter
+│   └── pennylane.py           # PennyLane adapter
+├── analysis/                  # Analysis tools
+│   ├── score.py               # Reproducibility scoring
+│   ├── drift.py               # Calibration drift analysis
+│   └── validation.py          # Trace validation
+├── cli/                       # Command-line interface
+└── notebook/                  # Jupyter integration
+```
+
+---
+
+## How It Works
+
+1. **Import Detection**: When you `import qbom`, it installs an import hook
+2. **Framework Detection**: When quantum frameworks are imported, adapters are installed
+3. **Invisible Capture**: Adapters hook into framework functions (transpile, run, etc.)
+4. **Auto-Finalization**: When results are retrieved, the trace is saved
+5. **Local Storage**: Traces are stored in `~/.qbom/traces/`
+
+```python
+import qbom                    # 1. Import hook installed
+from qiskit import ...         # 2. Qiskit adapter installed
+transpile(circuit, backend)    # 3. Transpilation captured
+job = backend.run(circuit)     # 3. Execution captured
+result = job.result()          # 4. Results captured, trace saved
 ```
 
 ---
 
 ## Use Cases
 
-### Academic Reproducibility
+QBOM solves real problems in quantum computing research and development:
 
-Generate reproducibility statements for your papers:
+| Use Case | Problem Solved |
+|----------|---------------|
+| **Academic Papers** | Generate complete reproducibility statements for publications |
+| **Debugging** | Quickly identify why two runs produced different results |
+| **Compliance** | Export to CycloneDX/SPDX for audit trails and regulations |
+| **Teaching** | Verify student submissions and compare to reference solutions |
+| **Benchmarking** | Ensure fair algorithm comparisons with controlled variables |
+| **Collaboration** | Share experiments with full context across institutions |
+
+See [detailed use cases](docs/USE-CASES.md) for complete examples.
+
+### Academic Research
+
+Generate reproducibility statements for papers:
 
 ```bash
-$ qbom paper qbom_7x8k2mf9
+$ qbom paper qbom_c4b17b13
 
 Reproducibility Statement
-(For Methods section)
+─────────────────────────
+Experiments were performed using qiskit==2.2.3 on the aer_simulator
+backend. Circuits were transpiled with optimization level 2.
+Each experiment used 4,096 shots.
 
-Experiments were performed using qiskit==1.0.2 on the IBM Quantum
-ibm_brisbane quantum processor (127 qubits). Circuits were transpiled
-with optimization level 3. Each experiment used 4,096 shots. Hardware
-calibration data from 2025-01-15T06:00:00Z was used.
-
-Complete QBOM trace: qbom_7x8k2mf9
-Content hash: 3c7a2b1f9e8d4a5b
+Complete QBOM trace: qbom_c4b17b13
+Content hash: a9463e429a524897
 ```
 
 ### Experiment Comparison
@@ -269,69 +349,37 @@ Content hash: 3c7a2b1f9e8d4a5b
 Understand why results differ:
 
 ```bash
-$ qbom diff qbom_7x8k2mf9 qbom_3j9x1kp2
+$ qbom diff qbom_abc123 qbom_def456
 
 ╭─────────────────────────────────────────────────────────────────────╮
-│ Property              │ qbom_7x8k2mf9    │ qbom_3j9x1kp2    │ Match │
-├───────────────────────┼──────────────────┼──────────────────┼───────┤
-│ Backend               │ ibm_brisbane     │ ibm_kyoto        │ ✗     │
-│ Physical qubits       │ [12, 15]         │ [0, 1]           │ ✗     │
-│ Optimization level    │ 3                │ 2                │ ✗     │
-│ Shots                 │ 4096             │ 4096             │ ✓     │
+│ Property           │ qbom_abc123      │ qbom_def456      │ Match   │
+├────────────────────┼──────────────────┼──────────────────┼─────────┤
+│ Backend            │ ibm_brisbane     │ ibm_kyoto        │ ✗       │
+│ Optimization       │ 3                │ 2                │ ✗       │
+│ Shots              │ 4096             │ 4096             │ ✓       │
 ╰─────────────────────────────────────────────────────────────────────╯
-
-⚠ Different backends may explain result differences
 ```
 
-### Jupyter Notebooks
+### Compliance & Auditing
 
-Rich display in notebooks:
+Export to standard SBOM formats:
 
-```python
-import qbom
-qbom.current()  # Beautiful inline visualization
+```bash
+qbom export qbom_c4b17b13 experiment.cdx.json -f cyclonedx
+qbom export qbom_c4b17b13 experiment.spdx.json -f spdx
 ```
-
----
-
-## Architecture
-
-```
-qbom/
-├── core/           # Framework-agnostic models and session
-│   ├── models.py   # Pydantic data models
-│   ├── trace.py    # QBOM trace object
-│   └── session.py  # Global session management
-│
-├── adapters/       # Framework-specific capture
-│   ├── qiskit.py   # Qiskit hooks
-│   ├── cirq.py     # Cirq hooks (planned)
-│   └── pennylane.py # PennyLane hooks (planned)
-│
-├── cli/            # Command-line interface
-└── notebook/       # Jupyter integration
-```
-
-### How It Works
-
-1. **On import**: QBOM detects installed quantum frameworks
-2. **Hook installation**: Transparent hooks capture operations
-3. **Invisible capture**: Circuit, transpilation, execution captured
-4. **Auto-finalize**: Trace saved when job completes
-5. **Local storage**: Traces stored in `~/.qbom/traces/`
 
 ---
 
 ## Part of QRAMM
 
-QBOM is part of the [QRAMM](https://qramm.org) (Quantum Readiness Assurance Maturity Model) toolkit by [CSNP](https://csnp.org).
+QBOM is part of the [QRAMM](https://qramm.org) (Quantum Readiness Assurance Maturity Model) toolkit developed by [CSNP](https://csnp.org).
 
 | Tool | Purpose |
 |------|---------|
 | **QBOM** | Quantum experiment reproducibility |
-| [CryptoScan](https://github.com/csnp/qramm-cryptoscan) | Cryptographic vulnerability discovery |
-| [TLS Analyzer](https://github.com/csnp/qramm-tls-analyzer) | TLS/SSL configuration analysis |
-| [CryptoDeps](https://github.com/csnp/qramm-cryptodeps) | Dependency cryptography analysis |
+| [CryptoScan](https://github.com/csnp/cryptoscan) | Cryptographic vulnerability discovery |
+| [TLS Analyzer](https://github.com/csnp/tls-analyzer) | TLS/SSL configuration analysis |
 
 ---
 
@@ -339,14 +387,10 @@ QBOM is part of the [QRAMM](https://qramm.org) (Quantum Readiness Assurance Matu
 
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-### Development
-
 ```bash
-# Clone
+# Development setup
 git clone https://github.com/csnp/qbom.git
 cd qbom
-
-# Install with dev dependencies
 pip install -e ".[dev]"
 
 # Run tests
@@ -363,7 +407,7 @@ ruff check src/qbom
 
 ## License
 
-Apache License 2.0
+Apache License 2.0. See [LICENSE](LICENSE) for details.
 
 ---
 
@@ -385,6 +429,6 @@ Apache License 2.0
 
 **QBOM** — Because quantum experiments should be reproducible.
 
-Made with ❤️ by [CSNP](https://csnp.org)
+Made with care by [CSNP](https://csnp.org)
 
 </div>

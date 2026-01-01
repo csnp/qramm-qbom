@@ -81,12 +81,19 @@ def show(trace_id: str) -> None:
 @click.option(
     "-f",
     "--format",
-    type=click.Choice(["json", "cyclonedx", "yaml"]),
+    type=click.Choice(["json", "cyclonedx", "spdx", "yaml"]),
     default="json",
-    help="Export format",
+    help="Export format (json, cyclonedx, spdx, yaml)",
 )
 def export(trace_id: str, output: str, format: str) -> None:
-    """Export a trace to a file."""
+    """Export a trace to a file.
+
+    Supported formats:
+    - json: Native QBOM format (default)
+    - cyclonedx: CycloneDX 1.5 SBOM with QBOM extension
+    - spdx: SPDX 2.3 SBOM with QBOM extension
+    - yaml: YAML representation
+    """
     from qbom.core.session import Session
     from qbom.core.trace import Trace
 
@@ -187,6 +194,295 @@ def init() -> None:
     console.print("[cyan]import qbom  # That's it![/cyan]\n")
     console.print("Your experiments will be automatically captured.")
     console.print(f"Traces stored in: [dim]~/.qbom/traces/[/dim]")
+
+
+@main.command()
+@click.argument("trace_id")
+def score(trace_id: str) -> None:
+    """Show reproducibility score for a trace.
+
+    Computes a 0-100 score indicating how reproducible an experiment is:
+    - 90-100: Excellent - Fully reproducible
+    - 70-89:  Good - Minor details missing
+    - 50-69:  Fair - Some important info missing
+    - 25-49:  Poor - Major gaps in documentation
+    - 0-24:   Critical - Cannot reproduce
+    """
+    from rich.panel import Panel
+    from rich.table import Table
+
+    from qbom.analysis import compute_score
+    from qbom.core.session import Session
+    from qbom.core.trace import Trace
+
+    session = Session.get()
+    trace_path = session._storage_path / f"{trace_id}.json"
+
+    if not trace_path.exists():
+        for path in session._storage_path.glob("*.json"):
+            if trace_id in path.stem:
+                trace_path = path
+                break
+
+    if not trace_path.exists():
+        console.print(f"[red]Trace not found: {trace_id}[/red]")
+        return
+
+    trace = Trace.model_validate_json(trace_path.read_text())
+    result = compute_score(trace)
+
+    # Display score
+    grade_colors = {
+        "Excellent": "green",
+        "Good": "blue",
+        "Fair": "yellow",
+        "Poor": "orange1",
+        "Critical": "red",
+    }
+    color = grade_colors.get(result.grade, "white")
+
+    console.print()
+    console.print(
+        Panel(
+            f"[bold {color}]{result.total_score}/{result.max_score}[/bold {color}] "
+            f"([{color}]{result.grade}[/{color}])",
+            title="Reproducibility Score",
+            subtitle=trace.id,
+        )
+    )
+
+    # Component breakdown
+    table = Table(title="Score Breakdown", show_header=True)
+    table.add_column("Component", style="cyan")
+    table.add_column("Category", style="dim")
+    table.add_column("Score", justify="right")
+    table.add_column("Status")
+
+    status_icons = {"complete": "[green]●[/green]", "partial": "[yellow]◐[/yellow]", "missing": "[red]○[/red]"}
+
+    for component in result.components:
+        status_icon = status_icons.get(component.status, "?")
+        table.add_row(
+            component.name,
+            component.category,
+            f"{component.earned_points}/{component.max_points}",
+            status_icon,
+        )
+
+    console.print(table)
+
+    # Recommendations
+    if result.recommendations:
+        console.print("\n[bold]Recommendations:[/bold]")
+        for rec in result.recommendations:
+            console.print(f"  • {rec}")
+
+    console.print()
+
+
+@main.command()
+@click.argument("trace_id")
+def drift(trace_id: str) -> None:
+    """Analyze calibration drift for a trace.
+
+    Shows how hardware calibration may have changed since the experiment ran.
+    This helps understand why reproduction attempts might produce different results.
+    """
+    from rich.panel import Panel
+    from rich.table import Table
+
+    from qbom.analysis import analyze_drift
+    from qbom.core.session import Session
+    from qbom.core.trace import Trace
+
+    session = Session.get()
+    trace_path = session._storage_path / f"{trace_id}.json"
+
+    if not trace_path.exists():
+        for path in session._storage_path.glob("*.json"):
+            if trace_id in path.stem:
+                trace_path = path
+                break
+
+    if not trace_path.exists():
+        console.print(f"[red]Trace not found: {trace_id}[/red]")
+        return
+
+    trace = Trace.model_validate_json(trace_path.read_text())
+    result = analyze_drift(trace)
+
+    if result is None:
+        console.print("[yellow]No hardware information available for drift analysis.[/yellow]")
+        return
+
+    # Display drift analysis
+    feasibility_colors = {
+        "High": "green",
+        "Medium": "yellow",
+        "Low": "orange1",
+        "Very Low": "red",
+    }
+    color = feasibility_colors.get(result.reproduction_feasibility, "white")
+
+    console.print()
+    console.print(
+        Panel(
+            f"Drift Score: [bold]{result.overall_drift_score:.0f}/100[/bold]\n"
+            f"Reproduction Feasibility: [bold {color}]{result.reproduction_feasibility}[/bold {color}]",
+            title="Calibration Drift Analysis",
+            subtitle=trace.id,
+        )
+    )
+
+    # Time information
+    if result.time_elapsed:
+        days = result.time_elapsed.days
+        if days > 0:
+            console.print(f"\n[dim]Time since calibration: {days} days[/dim]")
+        else:
+            hours = result.time_elapsed.seconds // 3600
+            console.print(f"\n[dim]Time since calibration: {hours} hours[/dim]")
+
+    # Qubit drift table
+    if result.qubit_drift:
+        table = Table(title="Qubit Drift", show_header=True)
+        table.add_column("Qubit", justify="right")
+        table.add_column("T1 Change", justify="right")
+        table.add_column("T2 Change", justify="right")
+        table.add_column("Readout Change", justify="right")
+        table.add_column("Status")
+
+        for qd in result.qubit_drift:
+            status = "[red]Drift[/red]" if qd.has_significant_drift else "[green]Stable[/green]"
+            table.add_row(
+                str(qd.qubit_index),
+                f"{qd.t1_change_percent:+.1f}%" if qd.t1_change_percent else "-",
+                f"{qd.t2_change_percent:+.1f}%" if qd.t2_change_percent else "-",
+                f"{qd.readout_change_percent:+.1f}%" if qd.readout_change_percent else "-",
+                status,
+            )
+        console.print(table)
+
+    # Gate drift table
+    if result.gate_drift:
+        table = Table(title="Gate Drift", show_header=True)
+        table.add_column("Gate")
+        table.add_column("Qubits")
+        table.add_column("Error Change", justify="right")
+        table.add_column("Status")
+
+        for gd in result.gate_drift:
+            status = "[red]Drift[/red]" if gd.has_significant_drift else "[green]Stable[/green]"
+            table.add_row(
+                gd.gate_name,
+                str(list(gd.qubits)),
+                f"{gd.error_change_percent:+.1f}%" if gd.error_change_percent else "-",
+                status,
+            )
+        console.print(table)
+
+    # Recommendations
+    if result.recommendations:
+        console.print("\n[bold]Recommendations:[/bold]")
+        for rec in result.recommendations:
+            console.print(f"  • {rec}")
+
+    console.print()
+
+
+@main.command()
+@click.argument("trace_id")
+@click.option(
+    "--publication",
+    is_flag=True,
+    help="Use stricter validation for publication",
+)
+def validate(trace_id: str, publication: bool) -> None:
+    """Validate a trace for completeness.
+
+    Checks that all required information is captured and provides
+    guidance on how to fix any issues found.
+
+    Use --publication for stricter checks when preparing for publication.
+    """
+    from rich.panel import Panel
+    from rich.table import Table
+
+    from qbom.analysis import ValidationLevel, validate_for_publication, validate_trace
+    from qbom.core.session import Session
+    from qbom.core.trace import Trace
+
+    session = Session.get()
+    trace_path = session._storage_path / f"{trace_id}.json"
+
+    if not trace_path.exists():
+        for path in session._storage_path.glob("*.json"):
+            if trace_id in path.stem:
+                trace_path = path
+                break
+
+    if not trace_path.exists():
+        console.print(f"[red]Trace not found: {trace_id}[/red]")
+        return
+
+    trace = Trace.model_validate_json(trace_path.read_text())
+
+    if publication:
+        result = validate_for_publication(trace)
+        title = "Publication Validation"
+    else:
+        result = validate_trace(trace)
+        title = "Trace Validation"
+
+    # Display result
+    if result.is_complete:
+        status_color = "green"
+        status_text = "PASS"
+    elif result.is_valid:
+        status_color = "yellow"
+        status_text = "WARNINGS"
+    else:
+        status_color = "red"
+        status_text = "FAIL"
+
+    console.print()
+    console.print(
+        Panel(
+            f"[bold {status_color}]{status_text}[/bold {status_color}]\n\n{result.summary}",
+            title=title,
+            subtitle=trace.id,
+        )
+    )
+
+    # Show issues by category
+    if result.issues:
+        # Group by category
+        categories: dict[str, list] = {}
+        for issue in result.issues:
+            if issue.category not in categories:
+                categories[issue.category] = []
+            categories[issue.category].append(issue)
+
+        for category, issues in categories.items():
+            console.print(f"\n[bold]{category}:[/bold]")
+            for issue in issues:
+                level_colors = {
+                    ValidationLevel.ERROR: "red",
+                    ValidationLevel.WARNING: "yellow",
+                    ValidationLevel.INFO: "dim",
+                }
+                color = level_colors.get(issue.level, "white")
+                console.print(f"  [{color}]{issue.icon}[/{color}] {issue.message}")
+                console.print(f"    [dim]Fix: {issue.fix}[/dim]")
+
+    # Summary counts
+    console.print()
+    console.print(
+        f"[red]{result.error_count} errors[/red] | "
+        f"[yellow]{result.warning_count} warnings[/yellow] | "
+        f"[dim]{result.info_count} info[/dim]"
+    )
+    console.print()
 
 
 if __name__ == "__main__":

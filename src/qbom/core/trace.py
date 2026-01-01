@@ -150,17 +150,23 @@ class Trace(BaseModel):
     def export(
         self,
         path: str | Path,
-        format: Literal["json", "cyclonedx", "yaml"] = "json",
+        format: Literal["json", "cyclonedx", "spdx", "yaml"] = "json",
     ) -> Path:
         """
         Export trace to file.
 
         Args:
             path: Output file path
-            format: Export format (json, cyclonedx, yaml)
+            format: Export format (json, cyclonedx, spdx, yaml)
 
         Returns:
             Path to exported file
+
+        Supported Formats:
+            - json: Native QBOM format (default)
+            - cyclonedx: CycloneDX 1.5 SBOM with QBOM extension
+            - spdx: SPDX 2.3 SBOM with QBOM extension
+            - yaml: YAML representation of native format
         """
         path = Path(path)
 
@@ -168,6 +174,8 @@ class Trace(BaseModel):
             path.write_text(self.to_json())
         elif format == "cyclonedx":
             path.write_text(self._to_cyclonedx())
+        elif format == "spdx":
+            path.write_text(self._to_spdx())
         elif format == "yaml":
             import yaml  # Optional dependency
 
@@ -227,6 +235,171 @@ class Trace(BaseModel):
                     }
                 )
         return components
+
+    def _to_spdx(self) -> str:
+        """
+        Export as SPDX 2.3 SBOM with QBOM extension.
+
+        SPDX (Software Package Data Exchange) is an open standard for
+        communicating software bill of materials information.
+        """
+        import uuid
+
+        # Generate SPDX document namespace
+        doc_namespace = f"https://qbom.csnp.org/spdx/{self.id}"
+
+        spdx = {
+            "spdxVersion": "SPDX-2.3",
+            "dataLicense": "CC0-1.0",
+            "SPDXID": "SPDXRef-DOCUMENT",
+            "name": self.metadata.name or f"qbom-trace-{self.id}",
+            "documentNamespace": doc_namespace,
+            "creationInfo": {
+                "created": self.created_at.isoformat(),
+                "creators": [
+                    "Tool: qbom-" + self.qbom_version,
+                    *[f"Person: {author}" for author in self.metadata.authors],
+                ],
+                "licenseListVersion": "3.19",
+            },
+            "packages": self._generate_spdx_packages(),
+            "relationships": self._generate_spdx_relationships(),
+            "annotations": self._generate_spdx_annotations(),
+        }
+
+        # Add external document references if paper is available
+        if self.metadata.paper:
+            spdx["externalDocumentRefs"] = [
+                {
+                    "externalDocumentId": "DocumentRef-paper",
+                    "spdxDocument": self.metadata.paper,
+                    "checksum": {
+                        "algorithm": "SHA256",
+                        "checksumValue": "0" * 64,  # Placeholder
+                    },
+                }
+            ]
+
+        return json.dumps(spdx, indent=2, default=str)
+
+    def _generate_spdx_packages(self) -> list[dict]:
+        """Generate SPDX packages from environment and experiment."""
+        packages = []
+
+        # Main experiment package
+        main_pkg = {
+            "SPDXID": "SPDXRef-QuantumExperiment",
+            "name": self.metadata.name or "quantum-experiment",
+            "versionInfo": self.id,
+            "downloadLocation": "NOASSERTION",
+            "filesAnalyzed": False,
+            "supplier": "NOASSERTION",
+            "originator": "NOASSERTION",
+            "licenseConcluded": "NOASSERTION",
+            "licenseDeclared": "NOASSERTION",
+            "copyrightText": "NOASSERTION",
+            "comment": self.metadata.description or "Quantum computing experiment",
+            "externalRefs": [
+                {
+                    "referenceCategory": "OTHER",
+                    "referenceType": "qbom",
+                    "referenceLocator": f"qbom:{self.id}",
+                    "comment": f"QBOM content hash: {self.content_hash}",
+                }
+            ],
+        }
+
+        # Add hardware info if available
+        if self.hardware:
+            main_pkg["comment"] += f" | Backend: {self.hardware.backend}"
+            if self.hardware.calibration:
+                main_pkg["comment"] += f" | Calibration: {self.hardware.calibration.timestamp.isoformat()}"
+
+        packages.append(main_pkg)
+
+        # Add environment packages
+        if self.environment:
+            for idx, pkg in enumerate(self.environment.packages):
+                spdx_pkg = {
+                    "SPDXID": f"SPDXRef-Package-{idx}",
+                    "name": pkg.name,
+                    "versionInfo": pkg.version,
+                    "downloadLocation": "NOASSERTION",
+                    "filesAnalyzed": False,
+                    "supplier": "NOASSERTION",
+                    "originator": "NOASSERTION",
+                    "licenseConcluded": "NOASSERTION",
+                    "licenseDeclared": "NOASSERTION",
+                    "copyrightText": "NOASSERTION",
+                    "externalRefs": [
+                        {
+                            "referenceCategory": "PACKAGE-MANAGER",
+                            "referenceType": "purl",
+                            "referenceLocator": pkg.purl or f"pkg:pypi/{pkg.name}@{pkg.version}",
+                        }
+                    ],
+                }
+                packages.append(spdx_pkg)
+
+        return packages
+
+    def _generate_spdx_relationships(self) -> list[dict]:
+        """Generate SPDX relationships between packages."""
+        relationships = [
+            {
+                "spdxElementId": "SPDXRef-DOCUMENT",
+                "relatedSpdxElement": "SPDXRef-QuantumExperiment",
+                "relationshipType": "DESCRIBES",
+            }
+        ]
+
+        # Add dependencies
+        if self.environment:
+            for idx, _ in enumerate(self.environment.packages):
+                relationships.append(
+                    {
+                        "spdxElementId": "SPDXRef-QuantumExperiment",
+                        "relatedSpdxElement": f"SPDXRef-Package-{idx}",
+                        "relationshipType": "DEPENDS_ON",
+                    }
+                )
+
+        return relationships
+
+    def _generate_spdx_annotations(self) -> list[dict]:
+        """Generate SPDX annotations with QBOM data."""
+        annotations = []
+
+        # Embed QBOM trace as annotation (SPDX extension mechanism)
+        qbom_annotation = {
+            "annotationDate": self.created_at.isoformat(),
+            "annotationType": "OTHER",
+            "annotator": "Tool: qbom",
+            "comment": json.dumps(
+                {
+                    "qbom_version": self.qbom_version,
+                    "trace_id": self.id,
+                    "content_hash": self.content_hash,
+                    "summary": self.summary,
+                    # Include key reproducibility data
+                    "circuits": len(self.circuits),
+                    "hardware": {
+                        "backend": self.hardware.backend if self.hardware else None,
+                        "qubits_used": self.hardware.qubits_used if self.hardware else None,
+                        "is_simulator": self.hardware.is_simulator if self.hardware else None,
+                    },
+                    "execution": {
+                        "shots": self.execution.shots if self.execution else None,
+                    },
+                    # Full QBOM data reference
+                    "full_qbom": self.to_dict(),
+                },
+                default=str,
+            ),
+        }
+        annotations.append(qbom_annotation)
+
+        return annotations
 
     # ========================================================================
     # Display Methods

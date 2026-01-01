@@ -182,17 +182,15 @@ class QiskitAdapter(Adapter):
 
     def install(self) -> None:
         """Install Qiskit hooks."""
-        if self._installed:
-            return
-
         try:
             import qiskit
             from qiskit import transpile as original_transpile
 
-            # Hook transpile
-            self._wrap_function(qiskit, "transpile", self._make_transpile_wrapper)
+            # Hook transpile (only once)
+            if not self._installed:
+                self._wrap_function(qiskit, "transpile", self._make_transpile_wrapper)
 
-            # Hook backend run (via primitive or direct)
+            # Always try to hook backend run - new backends may have been imported
             self._hook_backend_run()
 
             self._installed = True
@@ -255,16 +253,20 @@ class QiskitAdapter(Adapter):
         except Exception:
             is_sim = False
 
+        provider_name = "Unknown"
         try:
-            provider_name = "Unknown"
-            if hasattr(backend, "provider"):
+            if hasattr(backend, "provider") and callable(backend.provider):
                 provider = backend.provider()
                 if provider:
                     provider_name = type(provider).__name__
                     if "IBM" in provider_name or "ibm" in str(backend.name):
                         provider_name = "IBM Quantum"
         except Exception:
-            provider_name = "Unknown"
+            pass  # Keep provider_name as Unknown
+
+        # Local simulators don't have providers
+        if provider_name == "Unknown" and "aer" in backend.name.lower():
+            provider_name = "Aer (Local)"
 
         hardware = Hardware(
             provider=provider_name,
@@ -277,51 +279,86 @@ class QiskitAdapter(Adapter):
 
     def _hook_backend_run(self) -> None:
         """Hook into backend.run() to capture execution."""
-        try:
-            # Hook the primitives (Sampler, Estimator) if using Qiskit Runtime
-            from qiskit_ibm_runtime import SamplerV2, EstimatorV2
+        adapter = self
 
-            # We'll hook the run method on primitives
-            # For now, hook at the lower level
-        except ImportError:
-            pass
-
-        # Hook the basic backend run
-        try:
-            from qiskit.providers import BackendV2
-
-            original_run = BackendV2.run
+        def make_run_wrapper(original_run: Callable, class_name: str) -> Callable:
+            """Create a wrapper for a run method."""
 
             @functools.wraps(original_run)
             def wrapped_run(self_backend: Any, *args: Any, **kwargs: Any) -> Any:
+                # Capture circuit if passed as first arg
+                circuits = args[0] if args else kwargs.get("circuits")
+                if circuits is not None:
+                    adapter._capture_circuits_from_run(circuits)
+
+                # Capture backend info
+                adapter._capture_backend(self_backend)
+
                 job = original_run(self_backend, *args, **kwargs)
 
                 # Store job metadata for later capture
-                adapter = QiskitAdapter._get_instance()
-                if adapter:
-                    adapter._pending_job_data[job.job_id()] = {
-                        "submitted_at": datetime.utcnow(),
-                        "shots": kwargs.get("shots", 4096),
-                    }
+                try:
+                    job_id = job.job_id()
+                except Exception:
+                    job_id = str(id(job))
 
-                    # Hook job.result()
-                    original_result = job.result
+                adapter._pending_job_data[job_id] = {
+                    "submitted_at": datetime.utcnow(),
+                    "shots": kwargs.get("shots", 4096),
+                    "backend": self_backend,
+                }
 
-                    @functools.wraps(original_result)
-                    def wrapped_result(*result_args: Any, **result_kwargs: Any) -> Any:
-                        result = original_result(*result_args, **result_kwargs)
-                        adapter._capture_result(job, result)
-                        return result
+                # Hook job.result()
+                original_result = job.result
 
-                    job.result = wrapped_result
+                @functools.wraps(original_result)
+                def wrapped_result(*result_args: Any, **result_kwargs: Any) -> Any:
+                    result = original_result(*result_args, **result_kwargs)
+                    adapter._capture_result(job, result, job_id)
+                    return result
+
+                job.result = wrapped_result
 
                 return job
 
-            BackendV2.run = wrapped_run
-            self._original_functions["BackendV2.run"] = (BackendV2, "run", original_run)
+            return wrapped_run
 
-        except Exception:
+        # Hook AerBackend.run (used by AerSimulator)
+        try:
+            from qiskit_aer.backends.aerbackend import AerBackend
+
+            if not hasattr(AerBackend, "_qbom_hooked"):
+                original_run = AerBackend.run
+                AerBackend.run = make_run_wrapper(original_run, "AerBackend")
+                AerBackend._qbom_hooked = True
+                self._original_functions["AerBackend.run"] = (AerBackend, "run", original_run)
+        except ImportError:
             pass
+
+        # Hook BackendV2.run (for IBM backends and others)
+        try:
+            from qiskit.providers import BackendV2
+
+            if not hasattr(BackendV2, "_qbom_hooked"):
+                original_run = BackendV2.run
+                BackendV2.run = make_run_wrapper(original_run, "BackendV2")
+                BackendV2._qbom_hooked = True
+                self._original_functions["BackendV2.run"] = (BackendV2, "run", original_run)
+        except ImportError:
+            pass
+
+    def _capture_circuits_from_run(self, circuits: Any) -> None:
+        """Capture circuits passed to run()."""
+        builder = self.session.current_builder
+
+        # Handle single circuit or list
+        circuit_list = circuits if isinstance(circuits, list) else [circuits]
+
+        for qc in circuit_list:
+            try:
+                builder.add_circuit(_circuit_to_model(qc))
+            except Exception:
+                pass  # Silently continue
 
     @classmethod
     def _get_instance(cls) -> QiskitAdapter | None:
@@ -334,10 +371,15 @@ class QiskitAdapter(Adapter):
                 return adapter
         return None
 
-    def _capture_result(self, job: Any, result: Any) -> None:
+    def _capture_result(self, job: Any, result: Any, job_id: str | None = None) -> None:
         """Capture job result."""
         builder = self.session.current_builder
-        job_id = job.job_id()
+
+        if job_id is None:
+            try:
+                job_id = job.job_id()
+            except Exception:
+                job_id = str(id(job))
 
         # Get stored job data
         job_data = self._pending_job_data.pop(job_id, {})

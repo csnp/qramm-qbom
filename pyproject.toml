@@ -77,4 +77,4 @@ strict = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --cov=qbom"
+addopts = "-v"

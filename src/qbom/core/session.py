@@ -9,6 +9,7 @@ capturing quantum operations.
 from __future__ import annotations
 
 import atexit
+import importlib
 import platform
 import sys
 import threading
@@ -22,6 +23,55 @@ from qbom.core.trace import Trace, TraceBuilder
 
 if TYPE_CHECKING:
     from qbom.adapters.base import Adapter
+
+
+class QBOMImportFinder:
+    """
+    Import hook to detect when quantum frameworks are imported after QBOM.
+
+    This ensures adapters are installed even if qiskit/cirq/pennylane
+    are imported after 'import qbom'.
+    """
+
+    # Map submodules to their main framework
+    WATCHED_MODULES = {
+        "qiskit": "qiskit",
+        "qiskit_aer": "qiskit",  # Part of qiskit ecosystem
+        "qiskit_ibm_runtime": "qiskit",
+        "cirq": "cirq",
+        "cirq_google": "cirq",
+        "pennylane": "pennylane",
+    }
+
+    def find_module(self, fullname: str, path: str | None = None) -> QBOMImportFinder | None:
+        """Called when Python tries to import a module."""
+        # Check if this is a quantum framework we care about
+        base_module = fullname.split(".")[0]
+        if base_module in self.WATCHED_MODULES:
+            return self
+        return None
+
+    def load_module(self, fullname: str) -> object:
+        """Load the module and install our adapter."""
+        # Remove ourselves temporarily to avoid recursion
+        sys.meta_path.remove(self)
+
+        try:
+            # Import the actual module
+            module = importlib.import_module(fullname)
+
+            # Install/update adapter for this framework
+            base_module = fullname.split(".")[0]
+            framework = self.WATCHED_MODULES.get(base_module)
+            if framework:
+                # Re-install adapter to pick up new classes (like AerBackend)
+                Session.get()._reinstall_adapter_for(framework)
+
+            return module
+        finally:
+            # Re-add ourselves
+            if self not in sys.meta_path:
+                sys.meta_path.insert(0, self)
 
 
 class Session:
@@ -71,7 +121,11 @@ class Session:
         self._current_builder = TraceBuilder()
         self._current_builder.set_environment(self._capture_environment())
 
-        # Install framework adapters
+        # Install import hook to detect quantum frameworks imported later
+        self._import_finder = QBOMImportFinder()
+        sys.meta_path.insert(0, self._import_finder)
+
+        # Install adapters for frameworks already imported
         self._install_adapters()
 
         # Save traces on exit
@@ -126,26 +180,57 @@ class Session:
             timestamp=datetime.utcnow(),
         )
 
+    # Mapping of framework name to adapter info
+    ADAPTER_MAP = {
+        "qiskit": ("qbom.adapters.qiskit", "QiskitAdapter"),
+        "cirq": ("qbom.adapters.cirq", "CirqAdapter"),
+        "pennylane": ("qbom.adapters.pennylane", "PennyLaneAdapter"),
+    }
+
     def _install_adapters(self) -> None:
         """Detect and install available framework adapters."""
-        # Import adapters lazily based on what's installed
-        adapters_to_try = [
-            ("qiskit", "qbom.adapters.qiskit", "QiskitAdapter"),
-            ("cirq", "qbom.adapters.cirq", "CirqAdapter"),
-            ("pennylane", "qbom.adapters.pennylane", "PennyLaneAdapter"),
-        ]
-
-        for module_name, adapter_module, adapter_class in adapters_to_try:
+        for module_name in self.ADAPTER_MAP:
             if module_name in sys.modules:
-                try:
-                    import importlib
+                self._install_adapter_for(module_name)
 
-                    mod = importlib.import_module(adapter_module)
-                    adapter = getattr(mod, adapter_class)(self)
-                    adapter.install()
-                    self._adapters.append(adapter)
-                except ImportError:
-                    pass  # Adapter not available
+    def _install_adapter_for(self, framework: str) -> None:
+        """Install adapter for a specific framework."""
+        if framework not in self.ADAPTER_MAP:
+            return
+
+        # Check if already installed
+        adapter_module, adapter_class = self.ADAPTER_MAP[framework]
+        for existing in self._adapters:
+            if existing.name == framework:
+                return  # Already installed
+
+        try:
+            mod = importlib.import_module(adapter_module)
+            adapter = getattr(mod, adapter_class)(self)
+            adapter.install()
+            self._adapters.append(adapter)
+        except ImportError:
+            pass  # Adapter not available
+
+    def _reinstall_adapter_for(self, framework: str) -> None:
+        """Reinstall adapter to pick up newly imported classes."""
+        if framework not in self.ADAPTER_MAP:
+            return
+
+        # Find existing adapter
+        adapter_module, adapter_class = self.ADAPTER_MAP[framework]
+        existing_adapter = None
+        for adapter in self._adapters:
+            if adapter.name == framework:
+                existing_adapter = adapter
+                break
+
+        if existing_adapter:
+            # Re-run install to hook any new classes
+            existing_adapter.install()
+        else:
+            # Install for first time
+            self._install_adapter_for(framework)
 
     @property
     def current_builder(self) -> TraceBuilder:
@@ -265,13 +350,25 @@ class Session:
 
 def current() -> Trace:
     """
-    Get the current trace.
+    Get the current or most recent trace.
 
     Returns the trace being built for the current experiment.
-    If no experiment is in progress, returns an empty trace.
+    If the current experiment has completed (e.g., after job.result()),
+    returns the most recently finalized trace instead.
     """
     session = Session.get()
-    return session.current_builder.build()
+    builder = session.current_builder
+
+    # If current builder has meaningful data, return it
+    if builder._data.get("circuits") or builder._data.get("result"):
+        return builder.build()
+
+    # Otherwise return the most recent finalized trace if available
+    if session._traces:
+        return session._traces[-1]
+
+    # Fall back to empty trace from current builder
+    return builder.build()
 
 
 def export(path: str | Path, format: str = "json") -> Path:
