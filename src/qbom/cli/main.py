@@ -7,7 +7,6 @@ Beautiful command-line interface for managing quantum experiment traces.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import click
 from rich.console import Console
@@ -193,7 +192,7 @@ def init() -> None:
     console.print("Add this to your Python scripts or notebooks:\n")
     console.print("[cyan]import qbom  # That's it![/cyan]\n")
     console.print("Your experiments will be automatically captured.")
-    console.print(f"Traces stored in: [dim]~/.qbom/traces/[/dim]")
+    console.print("Traces stored in: [dim]~/.qbom/traces/[/dim]")
 
 
 @main.command()
@@ -244,8 +243,7 @@ def score(trace_id: str) -> None:
     console.print()
     console.print(
         Panel(
-            f"[bold {color}]{result.total_score}/{result.max_score}[/bold {color}] "
-            f"([{color}]{result.grade}[/{color}])",
+            f"[bold {color}]{result.total_score}/{result.max_score}[/bold {color}] ([{color}]{result.grade}[/{color}])",
             title="Reproducibility Score",
             subtitle=trace.id,
         )
@@ -406,7 +404,6 @@ def validate(trace_id: str, publication: bool) -> None:
     Use --publication for stricter checks when preparing for publication.
     """
     from rich.panel import Panel
-    from rich.table import Table
 
     from qbom.analysis import ValidationLevel, validate_for_publication, validate_trace
     from qbom.core.session import Session

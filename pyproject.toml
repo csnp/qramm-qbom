@@ -65,11 +65,14 @@ Issues = "https://github.com/csnp/qbom/issues"
 packages = ["src/qbom"]
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
+ignore = [
+    "F841",  # unused variables in incomplete adapter code (TODOs)
+]
 
 [tool.mypy]
 python_version = "3.10"

@@ -13,7 +13,7 @@ from __future__ import annotations
 import functools
 import hashlib
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from qbom.adapters.base import Adapter
 from qbom.core.models import (
@@ -67,7 +67,7 @@ def _extract_circuit_info(tape: Any) -> Circuit:
         circuit_hash = hashlib.sha256(ops_str.encode()).hexdigest()[:16]
 
         return Circuit(
-            name=tape.name if hasattr(tape, 'name') else None,
+            name=tape.name if hasattr(tape, "name") else None,
             num_qubits=num_qubits,
             num_clbits=num_measurements,
             depth=len(tape.operations),  # Simplified depth
@@ -87,8 +87,8 @@ def _extract_device_info(device: Any) -> Hardware:
     """Extract hardware information from a PennyLane device."""
     try:
         # Determine provider based on device name
-        device_name = device.name if hasattr(device, 'name') else str(type(device).__name__)
-        short_name = device.short_name if hasattr(device, 'short_name') else device_name
+        device_name = device.name if hasattr(device, "name") else str(type(device).__name__)
+        short_name = device.short_name if hasattr(device, "short_name") else device_name
 
         # Detect provider
         provider = "PennyLane"
@@ -102,13 +102,10 @@ def _extract_device_info(device: Any) -> Hardware:
             provider = "PennyLane Lightning"
 
         # Check if simulator
-        is_simulator = any(
-            sim in device_name.lower()
-            for sim in ["default", "lightning", "simulator", "sim"]
-        )
+        is_simulator = any(sim in device_name.lower() for sim in ["default", "lightning", "simulator", "sim"])
 
         # Get number of wires/qubits
-        num_qubits = device.num_wires if hasattr(device, 'num_wires') else 0
+        num_qubits = device.num_wires if hasattr(device, "num_wires") else 0
 
         return Hardware(
             provider=provider,
@@ -128,19 +125,15 @@ def _extract_device_info(device: Any) -> Hardware:
 def _process_result(result: Any, shots: int | None) -> tuple[Counts | None, str]:
     """Process PennyLane result into counts if applicable."""
     try:
-        import numpy as np
-
         # If result is a dictionary of counts (from qml.counts())
         if isinstance(result, dict):
             counts_dict = {str(k): int(v) for k, v in result.items()}
             total_shots = sum(counts_dict.values())
-            result_hash = hashlib.sha256(
-                str(sorted(counts_dict.items())).encode()
-            ).hexdigest()[:16]
+            result_hash = hashlib.sha256(str(sorted(counts_dict.items())).encode()).hexdigest()[:16]
             return Counts(raw=counts_dict, shots=total_shots), result_hash
 
         # If result is a numpy array or similar
-        if hasattr(result, 'tolist'):
+        if hasattr(result, "tolist"):
             result_str = str(result.tolist())
         else:
             result_str = str(result)
@@ -215,21 +208,21 @@ class PennyLaneAdapter(Adapter):
 
                 # Try to extract circuit info from the tape
                 try:
-                    if hasattr(self_qnode, 'tape') and self_qnode.tape is not None:
+                    if hasattr(self_qnode, "tape") and self_qnode.tape is not None:
                         circuit = _extract_circuit_info(self_qnode.tape)
                         builder.add_circuit(circuit)
-                    elif hasattr(self_qnode, 'qtape') and self_qnode.qtape is not None:
+                    elif hasattr(self_qnode, "qtape") and self_qnode.qtape is not None:
                         circuit = _extract_circuit_info(self_qnode.qtape)
                         builder.add_circuit(circuit)
                 except Exception:
                     pass
 
                 # Get shots from device
-                shots = getattr(device, 'shots', None)
+                shots = getattr(device, "shots", None)
                 if isinstance(shots, int):
                     num_shots = shots
                 elif shots is not None:
-                    num_shots = shots.total_shots if hasattr(shots, 'total_shots') else 1
+                    num_shots = shots.total_shots if hasattr(shots, "total_shots") else 1
                 else:
                     num_shots = 1
 
@@ -291,7 +284,7 @@ class PennyLaneAdapter(Adapter):
     def _hook_execute(self, qml: Any) -> None:
         """Hook qml.execute for batch execution."""
         try:
-            if not hasattr(qml, 'execute'):
+            if not hasattr(qml, "execute"):
                 return
 
             original_execute = qml.execute
@@ -333,7 +326,7 @@ class PennyLaneAdapter(Adapter):
                 completed_at = datetime.utcnow()
 
                 # Get shots
-                shots = getattr(device, 'shots', None)
+                shots = getattr(device, "shots", None)
                 num_shots = shots if isinstance(shots, int) else 1
 
                 execution = Execution(

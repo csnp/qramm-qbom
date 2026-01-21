@@ -224,6 +224,55 @@ qbom paper <id>               Generate paper statement
 qbom verify <file>            Verify trace integrity
 ```
 
+#### `qbom list` - View Recent Traces
+
+```
+$ qbom list
+
+                          Recent QBOM Traces
+╭───────────────┬──────────────────┬───────────────┬─────────┬───────╮
+│ ID            │ Created          │ Backend       │ Circuit │ Shots │
+├───────────────┼──────────────────┼───────────────┼─────────┼───────┤
+│ qbom_c4b17b13 │ 2025-01-15 14:40 │ aer_simulator │ 2q, d=3 │ 4,096 │
+│ qbom_bf522429 │ 2025-01-15 14:45 │ aer_simulator │ 2q, d=3 │ 1,024 │
+│ qbom_b8678a13 │ 2025-01-15 14:46 │ aer_simulator │ 2q, d=3 │ 1,024 │
+╰───────────────┴──────────────────┴───────────────┴─────────┴───────╯
+```
+
+#### `qbom validate` - Check Trace Completeness
+
+```
+$ qbom validate qbom_c4b17b13
+
+╭────────────────────────────── Trace Validation ──────────────────────────────╮
+│ PASS                                                                         │
+│ Trace is valid with 1 suggestion(s)                                          │
+╰─────────────────────────────── qbom_c4b17b13 ────────────────────────────────╯
+
+Circuit:
+  ℹ No QASM or JSON representation stored
+    Fix: Consider storing QASM for exact circuit reproduction.
+
+0 errors | 0 warnings | 1 info
+```
+
+#### `qbom paper` - Generate Paper Statement
+
+```
+$ qbom paper qbom_c4b17b13
+
+Reproducibility Statement
+
+(For Methods section)
+
+Experiments were performed using qiskit==2.2.3 on the aer_simulator simulator.
+Circuits were transpiled with optimization level 2. Each experiment used 4,096
+shots.
+
+Complete QBOM trace: qbom_c4b17b13
+Content hash: a9463e429a524897
+```
+
 ### Python API
 
 ```python

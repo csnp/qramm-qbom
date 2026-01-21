@@ -17,10 +17,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from qbom.core.models import Calibration, Hardware
+    from qbom.core.models import Calibration
     from qbom.core.trace import Trace
 
 
@@ -234,18 +234,20 @@ def analyze_drift(
             if orig_q.readout_error and curr_q.readout_error:
                 readout_change = ((curr_q.readout_error - orig_q.readout_error) / orig_q.readout_error) * 100
 
-            qubit_drift.append(QubitDrift(
-                qubit_index=orig_q.index,
-                t1_original=orig_q.t1_us,
-                t1_current=curr_q.t1_us,
-                t1_change_percent=t1_change,
-                t2_original=orig_q.t2_us,
-                t2_current=curr_q.t2_us,
-                t2_change_percent=t2_change,
-                readout_original=orig_q.readout_error,
-                readout_current=curr_q.readout_error,
-                readout_change_percent=readout_change,
-            ))
+            qubit_drift.append(
+                QubitDrift(
+                    qubit_index=orig_q.index,
+                    t1_original=orig_q.t1_us,
+                    t1_current=curr_q.t1_us,
+                    t1_change_percent=t1_change,
+                    t2_original=orig_q.t2_us,
+                    t2_current=curr_q.t2_us,
+                    t2_change_percent=t2_change,
+                    readout_original=orig_q.readout_error,
+                    readout_current=curr_q.readout_error,
+                    readout_change_percent=readout_change,
+                )
+            )
 
     # Analyze gate drift
     gate_drift = []
@@ -257,13 +259,15 @@ def analyze_drift(
                 if orig_g.error and curr_g.error:
                     error_change = ((curr_g.error - orig_g.error) / orig_g.error) * 100
 
-                gate_drift.append(GateDrift(
-                    gate_name=orig_g.gate,
-                    qubits=orig_g.qubits,
-                    error_original=orig_g.error,
-                    error_current=curr_g.error,
-                    error_change_percent=error_change,
-                ))
+                gate_drift.append(
+                    GateDrift(
+                        gate_name=orig_g.gate,
+                        qubits=orig_g.qubits,
+                        error_original=orig_g.error,
+                        error_current=curr_g.error,
+                        error_change_percent=error_change,
+                    )
+                )
                 break
 
     # Calculate overall drift score
@@ -338,9 +342,7 @@ def explain_result_difference(
     # Check backend differences
     if trace1.hardware and trace2.hardware:
         if trace1.hardware.backend != trace2.hardware.backend:
-            explanations.append(
-                f"Different backends: {trace1.hardware.backend} vs {trace2.hardware.backend}"
-            )
+            explanations.append(f"Different backends: {trace1.hardware.backend} vs {trace2.hardware.backend}")
 
         if trace1.hardware.qubits_used != trace2.hardware.qubits_used:
             explanations.append(
@@ -359,9 +361,9 @@ def explain_result_difference(
     # Check transpilation differences
     if trace1.transpilation and trace2.transpilation:
         if trace1.transpilation.optimization_level != trace2.transpilation.optimization_level:
-            explanations.append(
-                f"Different optimization levels: {trace1.transpilation.optimization_level} vs {trace2.transpilation.optimization_level}"
-            )
+            lvl1 = trace1.transpilation.optimization_level
+            lvl2 = trace2.transpilation.optimization_level
+            explanations.append(f"Different optimization levels: {lvl1} vs {lvl2}")
 
         if trace1.transpilation.final_layout != trace2.transpilation.final_layout:
             explanations.append("Different qubit mappings after transpilation")
@@ -369,9 +371,7 @@ def explain_result_difference(
     # Check execution differences
     if trace1.execution and trace2.execution:
         if trace1.execution.shots != trace2.execution.shots:
-            explanations.append(
-                f"Different shot counts: {trace1.execution.shots} vs {trace2.execution.shots}"
-            )
+            explanations.append(f"Different shot counts: {trace1.execution.shots} vs {trace2.execution.shots}")
 
     # Check circuit differences
     if trace1.circuits and trace2.circuits:

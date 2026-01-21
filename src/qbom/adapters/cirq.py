@@ -13,7 +13,7 @@ from __future__ import annotations
 import functools
 import hashlib
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from qbom.adapters.base import Adapter
 from qbom.core.models import (
@@ -74,8 +74,7 @@ def _circuit_to_model(circuit: Any) -> Circuit:
         num_qubits = len(all_qubits)
 
         # Count measurement operations for classical bits
-        num_clbits = sum(1 for op in circuit.all_operations()
-                        if isinstance(op.gate, cirq.MeasurementGate))
+        num_clbits = sum(1 for op in circuit.all_operations() if isinstance(op.gate, cirq.MeasurementGate))
 
         return Circuit(
             name=None,
@@ -86,7 +85,7 @@ def _circuit_to_model(circuit: Any) -> Circuit:
             hash=_hash_circuit(circuit),
             qasm=None,  # Cirq uses different format
         )
-    except Exception as e:
+    except Exception:
         # Fallback minimal circuit
         return Circuit(
             num_qubits=0,
@@ -102,20 +101,20 @@ def _extract_counts_from_result(result: Any, num_shots: int) -> Counts:
         # Cirq results have measurements as numpy arrays
         counts_dict: dict[str, int] = {}
 
-        if hasattr(result, 'measurements'):
+        if hasattr(result, "measurements"):
             # Get all measurement keys
             for key in result.measurements:
                 measurement_array = result.measurements[key]
                 # Convert each shot to bitstring
                 for shot in measurement_array:
-                    bitstring = ''.join(str(bit) for bit in shot)
+                    bitstring = "".join(str(bit) for bit in shot)
                     counts_dict[bitstring] = counts_dict.get(bitstring, 0) + 1
 
         if not counts_dict:
             # Try histogram method if available
-            if hasattr(result, 'histogram'):
+            if hasattr(result, "histogram"):
                 hist = result.histogram(key=list(result.measurements.keys())[0])
-                counts_dict = {format(k, 'b'): v for k, v in hist.items()}
+                counts_dict = {format(k, "b"): v for k, v in hist.items()}
 
         return Counts(raw=counts_dict, shots=num_shots)
     except Exception:
@@ -194,9 +193,7 @@ class CirqAdapter(Adapter):
                 submitted_at = datetime.utcnow()
 
                 # Run original
-                result = original_run(
-                    self_sim, program, param_resolver, repetitions, **kwargs
-                )
+                result = original_run(self_sim, program, param_resolver, repetitions, **kwargs)
 
                 completed_at = datetime.utcnow()
 
@@ -210,9 +207,7 @@ class CirqAdapter(Adapter):
 
                 # Capture results
                 counts = _extract_counts_from_result(result, repetitions)
-                result_hash = hashlib.sha256(
-                    str(sorted(counts.raw.items())).encode()
-                ).hexdigest()[:16]
+                result_hash = hashlib.sha256(str(sorted(counts.raw.items())).encode()).hexdigest()[:16]
 
                 qbom_result = Result(counts=counts, hash=result_hash)
                 builder.set_result(qbom_result)
@@ -260,9 +255,7 @@ class CirqAdapter(Adapter):
                 builder.set_hardware(hardware)
 
                 # Run original
-                result = original_simulate(
-                    self_sim, program, param_resolver, qubit_order, initial_state
-                )
+                result = original_simulate(self_sim, program, param_resolver, qubit_order, initial_state)
 
                 # For state vector simulation, we capture the final state
                 execution = Execution(
@@ -285,7 +278,7 @@ class CirqAdapter(Adapter):
     def _hook_density_matrix_simulator(self, cirq: Any) -> None:
         """Hook DensityMatrixSimulator if available."""
         try:
-            if hasattr(cirq, 'DensityMatrixSimulator'):
+            if hasattr(cirq, "DensityMatrixSimulator"):
                 original_run = cirq.DensityMatrixSimulator.run
                 adapter = self
 
@@ -312,9 +305,7 @@ class CirqAdapter(Adapter):
                     builder.set_hardware(hardware)
 
                     submitted_at = datetime.utcnow()
-                    result = original_run(
-                        self_sim, program, param_resolver, repetitions, **kwargs
-                    )
+                    result = original_run(self_sim, program, param_resolver, repetitions, **kwargs)
                     completed_at = datetime.utcnow()
 
                     execution = Execution(
@@ -326,9 +317,7 @@ class CirqAdapter(Adapter):
 
                     # Capture results
                     counts = _extract_counts_from_result(result, repetitions)
-                    result_hash = hashlib.sha256(
-                        str(sorted(counts.raw.items())).encode()
-                    ).hexdigest()[:16]
+                    result_hash = hashlib.sha256(str(sorted(counts.raw.items())).encode()).hexdigest()[:16]
 
                     qbom_result = Result(counts=counts, hash=result_hash)
                     builder.set_result(qbom_result)
@@ -351,7 +340,7 @@ class CirqAdapter(Adapter):
         try:
             import cirq_google
 
-            if hasattr(cirq_google, 'Engine'):
+            if hasattr(cirq_google, "Engine"):
                 # Hook the sampler's run method
                 original_run = cirq_google.Engine.get_sampler
                 adapter = self

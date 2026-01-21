@@ -13,10 +13,11 @@ import importlib
 import platform
 import sys
 import threading
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING
 
 from qbom.core.models import Environment, Package
 from qbom.core.trace import Trace, TraceBuilder

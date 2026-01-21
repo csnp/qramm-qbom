@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import functools
 import hashlib
+from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from qbom.adapters.base import Adapter
 from qbom.core.models import (
@@ -184,7 +185,6 @@ class QiskitAdapter(Adapter):
         """Install Qiskit hooks."""
         try:
             import qiskit
-            from qiskit import transpile as original_transpile
 
             # Hook transpile (only once)
             if not self._installed:
@@ -245,9 +245,7 @@ class QiskitAdapter(Adapter):
         builder = self.session.current_builder
 
         try:
-            is_sim = hasattr(backend, "options") and getattr(
-                backend.options, "simulator", False
-            )
+            is_sim = hasattr(backend, "options") and getattr(backend.options, "simulator", False)
             if not is_sim:
                 is_sim = "simulator" in backend.name.lower() or "aer" in backend.name.lower()
         except Exception:
@@ -404,9 +402,7 @@ class QiskitAdapter(Adapter):
                 shots = sum(counts_dict.values())
                 counts = Counts(raw=counts_dict, shots=shots)
 
-                result_hash = hashlib.sha256(
-                    str(sorted(counts_dict.items())).encode()
-                ).hexdigest()[:16]
+                result_hash = hashlib.sha256(str(sorted(counts_dict.items())).encode()).hexdigest()[:16]
 
                 qbom_result = Result(
                     counts=counts,

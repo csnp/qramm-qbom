@@ -212,9 +212,7 @@ class Trace(BaseModel):
 
         # Add paper reference if available
         if self.metadata.paper:
-            sbom["externalReferences"].append(
-                {"type": "documentation", "url": self.metadata.paper}
-            )
+            sbom["externalReferences"].append({"type": "documentation", "url": self.metadata.paper})
 
         # Embed full QBOM as extension
         sbom["extensions"] = {"qbom": self.to_dict()}
@@ -243,7 +241,6 @@ class Trace(BaseModel):
         SPDX (Software Package Data Exchange) is an open standard for
         communicating software bill of materials information.
         """
-        import uuid
 
         # Generate SPDX document namespace
         doc_namespace = f"https://qbom.csnp.org/spdx/{self.id}"

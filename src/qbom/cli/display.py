@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from rich import box
 
 if TYPE_CHECKING:
     from qbom.core.trace import Trace
@@ -106,7 +106,9 @@ def display_trace(trace: Trace) -> None:
         if t.final_layout:
             content.append(f"  Qubits:   {t.final_layout.physical_qubits}")
         if t.depth_increase:
-            content.append(f"  Depth:    {t.input_circuit.depth if t.input_circuit else '?'} → {t.output_circuit.depth if t.output_circuit else '?'} ({t.depth_increase:.1f}x)")
+            in_depth = t.input_circuit.depth if t.input_circuit else "?"
+            out_depth = t.output_circuit.depth if t.output_circuit else "?"
+            content.append(f"  Depth:    {in_depth} → {out_depth} ({t.depth_increase:.1f}x)")
         content.append("")
 
     # Hardware
@@ -129,7 +131,10 @@ def display_trace(trace: Trace) -> None:
                 for qi in h.qubits_used[:3]:  # Show first 3
                     q = cal.qubit(qi)
                     if q and q.t1_us:
-                        content.append(f"    Qubit {qi}: T1={q.t1_us:.0f}μs, T2={q.t2_us:.0f}μs" if q.t2_us else f"    Qubit {qi}: T1={q.t1_us:.0f}μs")
+                        if q.t2_us:
+                            content.append(f"    Qubit {qi}: T1={q.t1_us:.0f}μs, T2={q.t2_us:.0f}μs")
+                        else:
+                            content.append(f"    Qubit {qi}: T1={q.t1_us:.0f}μs")
         content.append("")
 
     # Execution
@@ -152,7 +157,7 @@ def display_trace(trace: Trace) -> None:
         for bitstring, prob in r.counts.top_results[:5]:
             bar_len = int(prob * 30)
             bar = "█" * bar_len + "░" * (30 - bar_len)
-            content.append(f"  |{bitstring}⟩ {bar} {prob*100:5.1f}%")
+            content.append(f"  |{bitstring}⟩ {bar} {prob * 100:5.1f}%")
 
         if len(r.counts.raw) > 5:
             content.append(f"  [dim]... and {len(r.counts.raw) - 5} more states[/dim]")
@@ -252,7 +257,8 @@ def generate_paper_statement(trace: Trace) -> str:
 
     # Transpilation
     if trace.transpilation and trace.transpilation.optimization_level:
-        statement_parts.append(f"Circuits were transpiled with optimization level {trace.transpilation.optimization_level}")
+        opt_level = trace.transpilation.optimization_level
+        statement_parts.append(f"Circuits were transpiled with optimization level {opt_level}")
 
     # Execution
     if trace.execution:

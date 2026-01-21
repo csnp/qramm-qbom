@@ -342,8 +342,7 @@ def validate_trace(trace: Trace) -> ValidationResult:
                     level=ValidationLevel.ERROR,
                     category="Execution",
                     message="Shot count not recorded",
-                    fix="The number of shots directly affects result statistics. "
-                    "Specify shots in your run() call.",
+                    fix="The number of shots directly affects result statistics. Specify shots in your run() call.",
                 )
             )
 
@@ -463,11 +462,7 @@ def validate_for_publication(trace: Trace) -> ValidationResult:
         circuit = trace.circuits[0]
         if not circuit.qasm and not circuit.json_repr:
             # Upgrade from INFO to WARNING for publication
-            issues = [
-                i
-                for i in issues
-                if not (i.category == "Circuit" and "QASM" in i.message)
-            ]
+            issues = [i for i in issues if not (i.category == "Circuit" and "QASM" in i.message)]
             issues.append(
                 ValidationIssue(
                     level=ValidationLevel.WARNING,

@@ -126,14 +126,16 @@ def compute_score(trace: Trace) -> ReproducibilityScore:
         status = "missing"
         recommendations.append("No environment captured - cannot reproduce software setup")
 
-    components.append(ScoreComponent(
-        name="Environment",
-        category="Software",
-        max_points=env_max,
-        earned_points=env_points,
-        status=status,
-        recommendation="Captures Python version and package dependencies" if status == "complete" else None,
-    ))
+    components.append(
+        ScoreComponent(
+            name="Environment",
+            category="Software",
+            max_points=env_max,
+            earned_points=env_points,
+            status=status,
+            recommendation="Captures Python version and package dependencies" if status == "complete" else None,
+        )
+    )
 
     # =========================================================================
     # CIRCUIT (20 points)
@@ -167,13 +169,15 @@ def compute_score(trace: Trace) -> ReproducibilityScore:
         status = "missing"
         recommendations.append("No circuit captured - the core of your experiment is missing")
 
-    components.append(ScoreComponent(
-        name="Circuit",
-        category="Quantum Program",
-        max_points=circuit_max,
-        earned_points=circuit_points,
-        status=status,
-    ))
+    components.append(
+        ScoreComponent(
+            name="Circuit",
+            category="Quantum Program",
+            max_points=circuit_max,
+            earned_points=circuit_points,
+            status=status,
+        )
+    )
 
     # =========================================================================
     # TRANSPILATION (15 points)
@@ -209,13 +213,15 @@ def compute_score(trace: Trace) -> ReproducibilityScore:
         if trace.hardware and not trace.hardware.is_simulator:
             recommendations.append("Transpilation not captured - critical for hardware experiments")
 
-    components.append(ScoreComponent(
-        name="Transpilation",
-        category="Circuit Compilation",
-        max_points=transp_max,
-        earned_points=transp_points,
-        status=status,
-    ))
+    components.append(
+        ScoreComponent(
+            name="Transpilation",
+            category="Circuit Compilation",
+            max_points=transp_max,
+            earned_points=transp_points,
+            status=status,
+        )
+    )
 
     # =========================================================================
     # HARDWARE (25 points) - Most important for real hardware
@@ -265,13 +271,15 @@ def compute_score(trace: Trace) -> ReproducibilityScore:
         status = "missing"
         recommendations.append("No hardware information - cannot determine where experiment ran")
 
-    components.append(ScoreComponent(
-        name="Hardware",
-        category="Backend & Calibration",
-        max_points=hw_max,
-        earned_points=hw_points,
-        status=status,
-    ))
+    components.append(
+        ScoreComponent(
+            name="Hardware",
+            category="Backend & Calibration",
+            max_points=hw_max,
+            earned_points=hw_points,
+            status=status,
+        )
+    )
 
     # =========================================================================
     # EXECUTION (10 points)
@@ -299,13 +307,15 @@ def compute_score(trace: Trace) -> ReproducibilityScore:
         status = "missing"
         recommendations.append("Execution parameters not captured")
 
-    components.append(ScoreComponent(
-        name="Execution",
-        category="Run Parameters",
-        max_points=exec_max,
-        earned_points=exec_points,
-        status=status,
-    ))
+    components.append(
+        ScoreComponent(
+            name="Execution",
+            category="Run Parameters",
+            max_points=exec_max,
+            earned_points=exec_points,
+            status=status,
+        )
+    )
 
     # =========================================================================
     # RESULTS (10 points)
@@ -333,13 +343,15 @@ def compute_score(trace: Trace) -> ReproducibilityScore:
         status = "missing"
         recommendations.append("No results captured - cannot verify reproduction")
 
-    components.append(ScoreComponent(
-        name="Results",
-        category="Output Verification",
-        max_points=result_max,
-        earned_points=result_points,
-        status=status,
-    ))
+    components.append(
+        ScoreComponent(
+            name="Results",
+            category="Output Verification",
+            max_points=result_max,
+            earned_points=result_points,
+            status=status,
+        )
+    )
 
     # =========================================================================
     # COMPUTE FINAL SCORE

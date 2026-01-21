@@ -1,15 +1,13 @@
 """Tests for QBOM core models."""
 
 import pytest
-from datetime import datetime
 
 from qbom.core.models import (
     Circuit,
+    Counts,
     Environment,
     GateCounts,
     Package,
-    Counts,
-    Result,
 )
 from qbom.core.trace import Trace, TraceBuilder
 
@@ -112,13 +110,7 @@ class TestTraceBuilder:
             hash="abc123",
         )
 
-        trace = (
-            TraceBuilder()
-            .set_environment(env)
-            .add_circuit(circuit)
-            .set_metadata(name="Chained")
-            .build()
-        )
+        trace = TraceBuilder().set_environment(env).add_circuit(circuit).set_metadata(name="Chained").build()
 
         assert trace.environment.python == "3.11.5"
         assert len(trace.circuits) == 1

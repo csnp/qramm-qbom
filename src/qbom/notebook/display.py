@@ -188,7 +188,7 @@ def trace_to_html(trace: Trace) -> str:
         sections.append(f"""
         <div class="qbom-section">
             <div class="qbom-section-title">Results ({trace.execution.shots:,} shots)</div>
-            {''.join(result_rows)}
+            {"".join(result_rows)}
         </div>
         """)
 
@@ -200,7 +200,7 @@ def trace_to_html(trace: Trace) -> str:
             <span class="qbom-trace-id">{trace.id}</span>
         </div>
         <div class="qbom-trace-body">
-            {''.join(sections)}
+            {"".join(sections)}
         </div>
     </div>
     """
